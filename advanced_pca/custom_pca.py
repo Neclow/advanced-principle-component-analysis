@@ -1,6 +1,6 @@
 """Custom principle component analysis module.
 
-Iplemented customizations
+Implemented customizations
 - varimax rotation for better interpretation of principal components
 - communalities calculation for selecting significant features
 - loading significant threshold comparison as function of sample size
@@ -8,48 +8,22 @@ Iplemented customizations
 - 'surrogate' feature selection used for dimensionality reduction -
   features with maximum laoding instead of principal components are selected
 """
-
-# IMPORTS
-# -------
-
-# Standard libraries
 import numbers
 
-
-# 3rd party libraries
 import numpy as np
-from numpy import linalg
 import pandas as pd
-
-from scipy.sparse import issparse
-
-import rpy2
 import rpy2.rlike.container as rlc
-from rpy2 import robjects
-from rpy2.robjects.vectors import FloatVector
-from rpy2.robjects.vectors import ListVector
-from rpy2.robjects.vectors import StrVector
-from rpy2.robjects import pandas2ri
 
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.model_selection import GridSearchCV
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.naive_bayes import ComplementNB
-from sklearn.metrics import f1_score
-from sklearn.decomposition import PCA
+from rpy2 import robjects as ro
+from rpy2.robjects.conversion import rpy2py
+from rpy2.robjects.vectors import FloatVector, ListVector, StrVector
+from scipy.sparse import issparse
 
 from sklearn.decomposition import PCA
 from sklearn.utils import check_array
 from sklearn.utils.extmath import svd_flip
 from sklearn.utils.extmath import stable_cumsum
 from sklearn.utils.validation import check_is_fitted
-
-from matplotlib import pyplot as plt
-import seaborn as sns
 
 class CustomPCA(PCA):
     '''Customized PCA with following options
@@ -104,11 +78,11 @@ class CustomPCA(PCA):
         # create and return r matrix
         values = FloatVector(df.values.flatten())
         dimnames = ListVector(
-            rlc.OrdDict([('index', StrVector(tuple(df.index))),
-            ('columns', StrVector(tuple(df.columns)))])
+            rlc.OrdDict([('index', StrVector(tuple(str(x) for x in df.index))),
+            ('columns', StrVector(tuple(str(x) for x in df.columns)))])
         )
 
-        return robjects.r.matrix(values, nrow=len(df.index), ncol=len(df.columns),
+        return ro.r.matrix(values, nrow=len(df.index), ncol=len(df.columns),
                                  dimnames = dimnames, byrow=True)
 
     def _varimax(self, factor_df, **kwargs):
@@ -123,9 +97,9 @@ class CustomPCA(PCA):
             rot_factor_df: rotated factor matrix as pd.DataFrame
         '''
         factor_mtr = self._df2mtr(factor_df)
-        varimax = robjects.r['varimax']
+        varimax = ro.r['varimax']
         rot_factor_mtr = varimax(factor_mtr)
-        return pandas2ri.ri2py(rot_factor_mtr.rx2('loadings'))
+        return rpy2py(rot_factor_mtr.rx2('loadings'))
 
     def _fit(self, X):
         """Dispatch to the right submethod depending on the chosen solver."""
@@ -181,7 +155,7 @@ class CustomPCA(PCA):
 
                 rot_factor_matrix = self._varimax(pd.DataFrame(factor_matrix))
 
-                self.explained_variance_ = (rot_factor_matrix ** 2).sum(axis=0)
+                self.explained_variance_ = (np.asarray(rot_factor_matrix) ** 2).sum(axis=0)
 
                 self.components_ = (
                     rot_factor_matrix
@@ -269,7 +243,7 @@ class CustomPCA(PCA):
         self.mean_ = np.mean(X, axis=0)
         X -= self.mean_
 
-        U, S, V = linalg.svd(X, full_matrices=False)
+        U, S, V = np.linalg.svd(X, full_matrices=False)
         # flip eigenvectors' sign to enforce deterministic output
         U, V = svd_flip(U, V)
 
